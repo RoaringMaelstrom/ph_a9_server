@@ -47,8 +47,12 @@ All routes are under `/api`. Responses are `{ success: true, data }` or `{ succe
 | POST | `/api/appointments` | Customer | Request an appointment (`serviceId, appointmentDate (YYYY-MM-DD), timeSlot (HH:mm), message?`). Saved as `pending` + `unpaid` |
 | GET | `/api/appointments/me` | Customer | The caller's own appointments, newest first, with `service` populated (`null` if deleted) |
 | PATCH | `/api/appointments/:id/cancel` | Customer | Cancel own appointment, only while `pending` |
+| GET | `/api/admin/appointments` | Admin | All appointments, newest first, with `service` and `customer` populated. Query: `status` (`pending`, `confirmed`, `cancelled`), `limit` (1-100) |
+| PATCH | `/api/admin/appointments/:id/status` | Admin | `{ status: "confirmed" }` (only from `pending`) or `{ status: "cancelled" }` (from `pending` or `confirmed`). Payment fields can't be changed |
+| GET | `/api/admin/users` | Admin | Registered customers (admins aren't listed), newest first, with `appointmentCount` |
+| PATCH | `/api/admin/users/:id/block` | Admin | `{ isBlocked: true | false }`. Admin accounts can't be blocked. Blocking also signs the user out |
 
-Other endpoints (payments, the rest of admin) are being implemented.
+Other endpoints (payments, transactions, admin stats) are being implemented.
 
 Service validation: price and duration must be positive (duration in whole minutes), category must be one of the 7 salon categories, and the image must be an `https` URL on ImgBB (`i.ibb.co`) or Unsplash (`images.unsplash.com`), the hosts the client can display.
 
@@ -74,6 +78,8 @@ After the token is verified, `requireRole` loads the user **from the database** 
 - Accounts that no longer exist get `401`.
 
 Admin accounts are never created through public sign-up; the `admin` role is assigned directly in the database.
+
+**Blocking a user** sets `isBlocked: true` and deletes their Better Auth `session` documents, so they're signed out on every device. Their API access stops immediately anyway, because every protected endpoint reads `isBlocked` from the database. Unblocking lets them sign in again.
 
 ## Data model
 

@@ -32,6 +32,11 @@ import {
   createAppointment,
   listMyAppointments,
 } from "./controllers/appointment.controller.js"
+import {
+  listAllAppointments,
+  updateAppointmentStatus,
+} from "./controllers/adminAppointment.controller.js"
+import { listUsers, setUserBlocked } from "./controllers/adminUser.controller.js"
 
 const app = express()
 
@@ -178,18 +183,18 @@ api.get("/admin/services", ...adminOnly, listAllServices)
 
 // ADMIN: all appointments with `service` + `customer` populated.
 // Query: status?, limit?
-api.get("/admin/appointments", ...adminOnly, notImplemented)
+api.get("/admin/appointments", ...adminOnly, listAllAppointments)
 
 // ADMIN: confirm (from "pending" only) or cancel (from "pending"/"confirmed").
 // Body: { status: "confirmed" | "cancelled" }. Never changes paymentStatus.
-api.patch("/admin/appointments/:id/status", ...adminOnly, notImplemented)
+api.patch("/admin/appointments/:id/status", ...adminOnly, updateAppointmentStatus)
 
-// ADMIN: registered users (customers).
-api.get("/admin/users", ...adminOnly, notImplemented)
+// ADMIN: registered customers (admins not listed), with appointmentCount.
+api.get("/admin/users", ...adminOnly, listUsers)
 
 // ADMIN: block/unblock a customer (never an admin). Body: { isBlocked }.
 // When blocking, also delete their Better Auth sessions.
-api.patch("/admin/users/:id/block", ...adminOnly, notImplemented)
+api.patch("/admin/users/:id/block", ...adminOnly, setUserBlocked)
 
 // ADMIN: all transactions (read-only; no write endpoints exist).
 api.get("/admin/transactions", ...adminOnly, notImplemented)
