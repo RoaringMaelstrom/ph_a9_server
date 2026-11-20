@@ -2,6 +2,21 @@ import { Schema, model, type InferSchemaType } from "mongoose"
 
 import { SERVICE_CATEGORIES, SERVICE_STATUSES } from "../constants.js"
 
+/**
+ * Image hosts the client can display (its next.config `images.remotePatterns`).
+ * Admins upload to ImgBB; Unsplash is allowed for seed data.
+ */
+export const ALLOWED_IMAGE_HOSTS = ["i.ibb.co", "images.unsplash.com"]
+
+function isAllowedImageUrl(value: string) {
+  try {
+    const url = new URL(value)
+    return url.protocol === "https:" && ALLOWED_IMAGE_HOSTS.includes(url.hostname)
+  } catch {
+    return false
+  }
+}
+
 /** A salon service on the menu (`services` collection). */
 const serviceSchema = new Schema(
   {
@@ -45,6 +60,10 @@ const serviceSchema = new Schema(
       type: String,
       required: [true, "Service image is required."],
       trim: true,
+      validate: {
+        validator: isAllowedImageUrl,
+        message: "Service image must be uploaded to ImgBB (https://i.ibb.co/...).",
+      },
     },
     status: {
       type: String,

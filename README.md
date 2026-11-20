@@ -40,8 +40,25 @@ All routes are under `/api`. Responses are `{ success: true, data }` or `{ succe
 | GET | `/api/services` | Public | Active services. Query: `search` (name), `category`, `sort` (`newest`, `price-asc`, `price-desc`, `duration-asc`, `duration-desc`), `limit` (max 100) |
 | GET | `/api/services/categories` | Public | `[{ category, count }]` of active services |
 | GET | `/api/services/:id` | Public | One service (404 if not found) |
+| GET | `/api/admin/services` | Admin | All services, including inactive |
+| POST | `/api/services` | Admin | Create a service (`serviceName, category, description, price, duration, image, status?`) |
+| PATCH | `/api/services/:id` | Admin | Update any of those fields (e.g. `{ "status": "inactive" }`) |
+| DELETE | `/api/services/:id` | Admin | Delete a service |
+| POST | `/api/appointments` | Customer | Request an appointment (`serviceId, appointmentDate (YYYY-MM-DD), timeSlot (HH:mm), message?`). Saved as `pending` + `unpaid` |
+| GET | `/api/appointments/me` | Customer | The caller's own appointments, newest first, with `service` populated (`null` if deleted) |
+| PATCH | `/api/appointments/:id/cancel` | Customer | Cancel own appointment, only while `pending` |
 
-Other endpoints (appointments, payments, admin) are being implemented.
+Other endpoints (payments, the rest of admin) are being implemented.
+
+Service validation: price and duration must be positive (duration in whole minutes), category must be one of the 7 salon categories, and the image must be an `https` URL on ImgBB (`i.ibb.co`) or Unsplash (`images.unsplash.com`), the hosts the client can display.
+
+Booking rules (`POST /api/appointments`):
+
+- The customer comes from the verified JWT and `servicePrice` from the service. `status`, `paymentStatus`, `customerId` or a price in the body are ignored.
+- Only **active** services can be booked (`400`; unknown service `404`).
+- The date must be a real date, not in the past and at most 60 days ahead. The time must be one of the hourly slots `10:00`–`17:00` (Sundays until `15:00`, the salon closes at 4 PM).
+- `409` if that service already has a pending or confirmed appointment at the same date and time, or if the customer already has one at that date and time. A unique partial index on `appointments` also stops two simultaneous requests from taking the same slot. Cancelled appointments free the slot.
+- Customers only ever see and cancel their **own** appointments; someone else's appointment is a `404`. Cancelling anything that isn't `pending` is a `409`.
 
 ### Authentication
 
@@ -68,6 +85,14 @@ MongoDB database `SalonBook`, shared with the client's Better Auth. Mongoose mod
 | `services` | `Service` | `serviceName, category, description, price (> 0), duration (minutes, > 0), image, status (active/inactive, default active), createdAt` |
 | `appointments` | `Appointment` | `serviceId → services, customerId → user, appointmentDate (YYYY-MM-DD), timeSlot (HH:mm), message, servicePrice, paymentStatus (unpaid/paid), status (pending/confirmed/cancelled), createdAt` |
 | `transactions` | `Transaction` | `appointmentId → appointments, customerId → user, amount, currency, stripeSessionId (unique), status (paid/failed), createdAt`. Written only by the Stripe webhook |
+
+## Sample data
+
+`seed/services.json` contains 8 sample services covering all 7 categories (MongoDB Extended JSON). Import them into the `services` collection with MongoDB Compass (**Add Data → Import JSON**), or:
+
+```bash
+mongoimport --uri "<MONGODB_URI>" --db SalonBook --collection services --jsonArray --file seed/services.json
+```
 
 ## Environment variables
 

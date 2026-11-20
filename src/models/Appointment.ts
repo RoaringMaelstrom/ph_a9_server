@@ -1,13 +1,14 @@
 import { Schema, model, type InferSchemaType } from "mongoose"
 
 import {
+  ACTIVE_APPOINTMENT_STATUSES,
   APPOINTMENT_STATUSES,
   PAYMENT_STATUSES,
   TIME_SLOTS,
 } from "../constants.js"
 
 /** "YYYY-MM-DD" that is a real calendar date (e.g. not 2026-02-30). */
-function isCalendarDate(value: string) {
+export function isCalendarDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
   const date = new Date(`${value}T00:00:00Z`)
   return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value)
@@ -91,8 +92,18 @@ appointmentSchema.virtual("customer", {
 // "My appointments" (customer) and admin lists, newest first.
 appointmentSchema.index({ customerId: 1, createdAt: -1 })
 appointmentSchema.index({ status: 1, createdAt: -1 })
-// Duplicate check: is this service already booked at this date + time?
-appointmentSchema.index({ serviceId: 1, appointmentDate: 1, timeSlot: 1, status: 1 })
+// One active (pending/confirmed) booking per service + date + time slot.
+// The controller checks first for a friendly message; this unique index stops
+// two simultaneous requests from both getting through. Cancelled appointments
+// are outside the index, so a cancelled slot can be booked again.
+appointmentSchema.index(
+  { serviceId: 1, appointmentDate: 1, timeSlot: 1 },
+  {
+    name: "unique_active_slot",
+    unique: true,
+    partialFilterExpression: { status: { $in: [...ACTIVE_APPOINTMENT_STATUSES] } },
+  }
+)
 
 export type AppointmentDoc = InferSchemaType<typeof appointmentSchema>
 

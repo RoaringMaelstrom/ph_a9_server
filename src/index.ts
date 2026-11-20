@@ -21,6 +21,17 @@ import {
   listPublicServices,
   listServiceCategories,
 } from "./controllers/service.controller.js"
+import {
+  createService,
+  deleteService,
+  listAllServices,
+  updateService,
+} from "./controllers/adminService.controller.js"
+import {
+  cancelMyAppointment,
+  createAppointment,
+  listMyAppointments,
+} from "./controllers/appointment.controller.js"
 
 const app = express()
 
@@ -116,27 +127,28 @@ api.get("/services/categories", listServiceCategories)
 api.get("/services/:id", getServiceById)
 
 // ADMIN: create a service. Body: ServiceInput (price > 0, duration > 0).
-api.post("/services", ...adminOnly, notImplemented)
+api.post("/services", ...adminOnly, createService)
 
 // ADMIN: update a service (partial ServiceInput, incl. status).
-api.patch("/services/:id", ...adminOnly, notImplemented)
+api.patch("/services/:id", ...adminOnly, updateService)
 
 // ADMIN: delete a service.
-api.delete("/services/:id", ...adminOnly, notImplemented)
+api.delete("/services/:id", ...adminOnly, deleteService)
 
 // --- Appointments (customer) ------------------------------------------------
 
 // CUSTOMER: request an appointment.
 // Body: { serviceId, appointmentDate: "YYYY-MM-DD", timeSlot: "HH:mm", message? }
 // Saved as status "pending" + paymentStatus "unpaid"; price taken from the service.
-// 400 inactive service / invalid input, 403 admin or blocked, 409 slot taken.
-api.post("/appointments", ...customerOnly, notImplemented)
+// 400 inactive service / invalid input, 403 admin or blocked, 409 slot taken
+// (same service + date + time) or the customer already booked that date + time.
+api.post("/appointments", ...customerOnly, createAppointment)
 
 // CUSTOMER: the caller's own appointments, with `service` populated.
-api.get("/appointments/me", ...customerOnly, notImplemented)
+api.get("/appointments/me", ...customerOnly, listMyAppointments)
 
 // CUSTOMER: cancel own appointment, only while "pending" (409 otherwise).
-api.patch("/appointments/:id/cancel", ...customerOnly, notImplemented)
+api.patch("/appointments/:id/cancel", ...customerOnly, cancelMyAppointment)
 
 // --- Payments & transactions ------------------------------------------------
 
@@ -162,7 +174,7 @@ api.get("/transactions/me", ...customerOnly, notImplemented)
 api.get("/admin/stats", ...adminOnly, notImplemented)
 
 // ADMIN: all services, including inactive ones.
-api.get("/admin/services", ...adminOnly, notImplemented)
+api.get("/admin/services", ...adminOnly, listAllServices)
 
 // ADMIN: all appointments with `service` + `customer` populated.
 // Query: status?, limit?

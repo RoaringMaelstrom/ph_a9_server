@@ -46,3 +46,9 @@ export type AppointmentStatus = (typeof APPOINTMENT_STATUSES)[number]
 export type PaymentStatus = (typeof PAYMENT_STATUSES)[number]
 export type TransactionStatus = (typeof TRANSACTION_STATUSES)[number]
 export type UserRole = (typeof USER_ROLES)[number]
+
+/** How far ahead customers can book (days). Matches the client's date picker. */
+export const BOOKING_WINDOW_DAYS = 60
+
+/** Sunday closes at 4 PM, so the last Sunday start time is 15:00. */
+export const SUNDAY_LAST_TIME_SLOT = "15:00"
