@@ -47,6 +47,17 @@ Other endpoints (appointments, payments, admin) are being implemented.
 
 Protected endpoints require `Authorization: Bearer <token>`, where the token is a Better Auth JWT (the client gets it from `/api/auth/token`). The `verifyJWT` middleware checks the signature against the client's public keys at `${BETTER_AUTH_URL}/api/auth/jwks`, plus the algorithm (EdDSA), issuer, audience and expiry. Missing or invalid tokens get `401`.
 
+### Authorization
+
+After the token is verified, `requireRole` loads the user **from the database** (not from the token, whose claims can be up to 15 minutes old) and enforces access on the server:
+
+- Blocked accounts get `403` on every protected endpoint.
+- Customer endpoints (`...customerOnly`) accept only `role: "customer"`.
+- Admin endpoints (`...adminOnly`) accept only `role: "admin"`.
+- Accounts that no longer exist get `401`.
+
+Admin accounts are never created through public sign-up; the `admin` role is assigned directly in the database.
+
 ## Data model
 
 MongoDB database `SalonBook`, shared with the client's Better Auth. Mongoose models are in `src/models/`.
