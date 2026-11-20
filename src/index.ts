@@ -15,6 +15,11 @@ import { connectDB } from "./config/db.js"
 import { errorHandler } from "./middlewares/errorHandler.js"
 import { notFound } from "./middlewares/notFound.js"
 import { sendData } from "./utils/sendResponse.js"
+import {
+  getServiceById,
+  listPublicServices,
+  listServiceCategories,
+} from "./controllers/service.controller.js"
 
 const app = express()
 
@@ -96,18 +101,18 @@ const api = express.Router()
 
 // --- Services ---------------------------------------------------------------
 
-// PUBLIC: list services. Query: status=active, search, category,
+// PUBLIC: list ACTIVE services. Query: search, category,
 // sort=newest|price-asc|price-desc|duration-asc|duration-desc, limit.
 // Used by: home Featured + New Arrivals, Browse Services page.
-api.get("/services", notImplemented)
+api.get("/services", listPublicServices)
 
 // PUBLIC: [{ category, count }] of ACTIVE services per category.
 // Used by: home Categories section. (Must stay above /services/:id.)
-api.get("/services/categories", notImplemented)
+api.get("/services/categories", listServiceCategories)
 
 // PUBLIC: one service by id (active or inactive). 404 if unknown.
 // Used by: service details page.
-api.get("/services/:id", notImplemented)
+api.get("/services/:id", getServiceById)
 
 // ADMIN: create a service. Body: ServiceInput (price > 0, duration > 0).
 api.post("/services", notImplemented)
