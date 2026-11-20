@@ -7,6 +7,7 @@ REST API for **SalonBook**, a salon appointment booking platform. Customers brow
 ## Tech stack
 
 - Node.js + Express 5 (TypeScript)
+- MongoDB with Mongoose (shares the database with the client's Better Auth)
 - Deployed on Vercel (zero-config Express; entry: `src/index.ts`)
 
 ## Getting started
@@ -17,7 +18,7 @@ npm install
 npm run dev   # http://localhost:5000
 ```
 
-Check it's running: `GET http://localhost:5000/api/health`.
+Check it's running: `GET http://localhost:5000/api/health` (also reports whether MongoDB is connected).
 
 ### Scripts
 
@@ -36,7 +37,9 @@ Create a `.env` file in the project root (locally) or add these in the Vercel pr
 | --- | --- |
 | `PORT` | Local port (default 5000) |
 | `NODE_ENV` | `development` or `production` |
-| `CLIENT_URL` | Allowed client origin(s) for CORS, comma-separated |
+| `MONGODB_URI` | **Required.** MongoDB connection string (same cluster as the client) |
+| `DB_NAME` | Database name (default `SalonBook`) |
+| `CLIENT_URL` | **Required.** Allowed client origin(s) for CORS, comma-separated |
 
 ## Links
 
