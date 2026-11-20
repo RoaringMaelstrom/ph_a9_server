@@ -14,6 +14,7 @@ import { env } from "./config/env.js"
 import { connectDB } from "./config/db.js"
 import { errorHandler } from "./middlewares/errorHandler.js"
 import { notFound } from "./middlewares/notFound.js"
+import { verifyJWT } from "./middlewares/verifyJWT.js"
 import { sendData } from "./utils/sendResponse.js"
 import {
   getServiceById,
@@ -115,13 +116,13 @@ api.get("/services/categories", listServiceCategories)
 api.get("/services/:id", getServiceById)
 
 // ADMIN: create a service. Body: ServiceInput (price > 0, duration > 0).
-api.post("/services", notImplemented)
+api.post("/services", verifyJWT, notImplemented)
 
 // ADMIN: update a service (partial ServiceInput, incl. status).
-api.patch("/services/:id", notImplemented)
+api.patch("/services/:id", verifyJWT, notImplemented)
 
 // ADMIN: delete a service.
-api.delete("/services/:id", notImplemented)
+api.delete("/services/:id", verifyJWT, notImplemented)
 
 // --- Appointments (customer) ------------------------------------------------
 
@@ -129,19 +130,19 @@ api.delete("/services/:id", notImplemented)
 // Body: { serviceId, appointmentDate: "YYYY-MM-DD", timeSlot: "HH:mm", message? }
 // Saved as status "pending" + paymentStatus "unpaid"; price taken from the service.
 // 400 inactive service / invalid input, 403 admin or blocked, 409 slot taken.
-api.post("/appointments", notImplemented)
+api.post("/appointments", verifyJWT, notImplemented)
 
 // CUSTOMER: the caller's own appointments, with `service` populated.
-api.get("/appointments/me", notImplemented)
+api.get("/appointments/me", verifyJWT, notImplemented)
 
 // CUSTOMER: cancel own appointment, only while "pending" (409 otherwise).
-api.patch("/appointments/:id/cancel", notImplemented)
+api.patch("/appointments/:id/cancel", verifyJWT, notImplemented)
 
 // --- Payments & transactions ------------------------------------------------
 
 // CUSTOMER: start Stripe Checkout for own "confirmed" + "unpaid" appointment.
 // Body: { appointmentId } → { url }
-api.post("/payments/checkout-session", notImplemented)
+api.post("/payments/checkout-session", verifyJWT, notImplemented)
 
 // STRIPE: webhook (checkout.session.completed). The ONLY place that marks an
 // appointment "paid" and creates the transaction. Receives the raw body.
@@ -152,34 +153,34 @@ api.post(
 )
 
 // CUSTOMER: the caller's own transactions (payment history).
-api.get("/transactions/me", notImplemented)
+api.get("/transactions/me", verifyJWT, notImplemented)
 
 // --- Admin --------------------------------------------------------------------
 
 // ADMIN: overview counts { totalCustomers, activeServices, totalAppointments,
 // pendingAppointments, confirmedAppointments, successfulPayments }.
-api.get("/admin/stats", notImplemented)
+api.get("/admin/stats", verifyJWT, notImplemented)
 
 // ADMIN: all services, including inactive ones.
-api.get("/admin/services", notImplemented)
+api.get("/admin/services", verifyJWT, notImplemented)
 
 // ADMIN: all appointments with `service` + `customer` populated.
 // Query: status?, limit?
-api.get("/admin/appointments", notImplemented)
+api.get("/admin/appointments", verifyJWT, notImplemented)
 
 // ADMIN: confirm (from "pending" only) or cancel (from "pending"/"confirmed").
 // Body: { status: "confirmed" | "cancelled" }. Never changes paymentStatus.
-api.patch("/admin/appointments/:id/status", notImplemented)
+api.patch("/admin/appointments/:id/status", verifyJWT, notImplemented)
 
 // ADMIN: registered users (customers).
-api.get("/admin/users", notImplemented)
+api.get("/admin/users", verifyJWT, notImplemented)
 
 // ADMIN: block/unblock a customer (never an admin). Body: { isBlocked }.
 // When blocking, also delete their Better Auth sessions.
-api.patch("/admin/users/:id/block", notImplemented)
+api.patch("/admin/users/:id/block", verifyJWT, notImplemented)
 
 // ADMIN: all transactions (read-only; no write endpoints exist).
-api.get("/admin/transactions", notImplemented)
+api.get("/admin/transactions", verifyJWT, notImplemented)
 
 app.use("/api", api)
 

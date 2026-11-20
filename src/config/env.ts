@@ -37,4 +37,11 @@ export const env = {
     .split(",")
     .map((url) => stripTrailingSlash(url.trim()))
     .filter(Boolean),
+
+  /**
+   * The Next.js app running Better Auth (its `baseURL`). JWTs are verified
+   * against its public keys at `${betterAuthUrl}/api/auth/jwks`, and must
+   * have this URL as issuer and audience.
+   */
+  betterAuthUrl: stripTrailingSlash(required("BETTER_AUTH_URL")),
 } as const
