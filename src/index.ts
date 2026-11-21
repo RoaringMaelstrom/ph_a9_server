@@ -42,6 +42,11 @@ import {
   getCheckoutSessionStatus,
   handleStripeWebhook,
 } from "./controllers/payment.controller.js"
+import {
+  listAllTransactions,
+  listMyTransactions,
+} from "./controllers/transaction.controller.js"
+import { getAdminStats } from "./controllers/adminStats.controller.js"
 
 const app = express()
 
@@ -104,20 +109,12 @@ app.use(async (_req: Request, _res: Response, next: NextFunction) => {
 
 // ===========================================================================
 // API endpoints (mounted under /api; the client's NEXT_PUBLIC_API_URL ends
-// with /api). Each one is a stub that answers 501 until it's implemented.
+// with /api).
 //   PUBLIC   no login needed
 //   CUSTOMER valid JWT + role "customer" + not blocked
 //   ADMIN    valid JWT + role "admin" + not blocked
 //   STRIPE   called by Stripe only; verified by webhook signature
 // ===========================================================================
-
-/** Placeholder handler: replace with the real implementation. */
-function notImplemented(req: Request, res: Response) {
-  res.status(501).json({
-    success: false,
-    message: `Not implemented yet: ${req.method} ${req.baseUrl}${req.route?.path ?? req.path}`,
-  })
-}
 
 const api = express.Router()
 
@@ -179,13 +176,13 @@ api.post(
 )
 
 // CUSTOMER: the caller's own transactions (payment history).
-api.get("/transactions/me", ...customerOnly, notImplemented)
+api.get("/transactions/me", ...customerOnly, listMyTransactions)
 
 // --- Admin --------------------------------------------------------------------
 
 // ADMIN: overview counts { totalCustomers, activeServices, totalAppointments,
 // pendingAppointments, confirmedAppointments, successfulPayments }.
-api.get("/admin/stats", ...adminOnly, notImplemented)
+api.get("/admin/stats", ...adminOnly, getAdminStats)
 
 // ADMIN: all services, including inactive ones.
 api.get("/admin/services", ...adminOnly, listAllServices)
@@ -206,7 +203,7 @@ api.get("/admin/users", ...adminOnly, listUsers)
 api.patch("/admin/users/:id/block", ...adminOnly, setUserBlocked)
 
 // ADMIN: all transactions (read-only; no write endpoints exist).
-api.get("/admin/transactions", ...adminOnly, notImplemented)
+api.get("/admin/transactions", ...adminOnly, listAllTransactions)
 
 app.use("/api", api)
 

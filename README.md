@@ -2,13 +2,21 @@
 
 REST API for **SalonBook**, a salon appointment booking platform. Customers browse services, request appointments and pay with Stripe. Admins manage services, appointments, users and transactions.
 
-> Work in progress. Features are added step by step.
+## Features
+
+- **Public service catalogue:** active services with search, category filter, sorting and limits, plus per-category counts.
+- **Appointment booking:** customers request a date and time slot; double bookings, past dates and closed hours are rejected, and a unique index prevents race conditions.
+- **JWT authentication:** Better Auth tokens are verified against the client's JWKS in a dedicated middleware.
+- **Server-side authorization:** every protected route re-reads the user's role and blocked status from the database.
+- **Admin tools:** service CRUD, confirm/cancel appointments, block/unblock customers (blocking also signs them out), overview statistics and a read-only transaction list.
+- **Stripe payments:** Checkout for confirmed appointments; only the signature-verified webhook marks an appointment paid and records the transaction.
 
 ## Tech stack
 
 - Node.js + Express 5 (TypeScript)
 - MongoDB with Mongoose (shares the database with the client's Better Auth)
 - JWT verification of Better Auth tokens with `jose` (JWKS)
+- Stripe Checkout + webhooks (`stripe`)
 - Deployed on Vercel (zero-config Express; entry: `src/index.ts`)
 
 ## Getting started
@@ -51,8 +59,12 @@ All routes are under `/api`. Responses are `{ success: true, data }` or `{ succe
 | PATCH | `/api/admin/appointments/:id/status` | Admin | `{ status: "confirmed" }` (only from `pending`) or `{ status: "cancelled" }` (from `pending` or `confirmed`). Payment fields can't be changed |
 | GET | `/api/admin/users` | Admin | Registered customers (admins aren't listed), newest first, with `appointmentCount` |
 | PATCH | `/api/admin/users/:id/block` | Admin | `{ isBlocked: true | false }`. Admin accounts can't be blocked. Blocking also signs the user out |
-
-Other endpoints (payments, transactions, admin stats) are being implemented.
+| GET | `/api/admin/stats` | Admin | `{ totalCustomers, activeServices, totalAppointments, pendingAppointments, confirmedAppointments, successfulPayments }` |
+| POST | `/api/payments/checkout-session` | Customer | `{ appointmentId }` → `{ url }`: Stripe Checkout for the caller's own **confirmed + unpaid** appointment |
+| GET | `/api/payments/checkout-session/:sessionId` | Customer | Read-only status of the caller's own Checkout Session (Payment Success page) |
+| POST | `/api/payments/webhook` | Stripe | Signature-verified webhook. The only place that sets `paymentStatus: "paid"` and creates transactions |
+| GET | `/api/transactions/me` | Customer | The caller's own payment history, newest first, with `service`, `customer` and `appointmentDate` |
+| GET | `/api/admin/transactions` | Admin | All transactions, same shape. Read-only: no endpoint edits transactions |
 
 Service validation: price and duration must be positive (duration in whole minutes), category must be one of the 7 salon categories, and the image must be an `https` URL on ImgBB (`i.ibb.co`) or Unsplash (`images.unsplash.com`), the hosts the client can display.
 
@@ -63,6 +75,13 @@ Booking rules (`POST /api/appointments`):
 - The date must be a real date, not in the past and at most 60 days ahead. The time must be one of the hourly slots `10:00`–`17:00` (Sundays until `15:00`, the salon closes at 4 PM).
 - `409` if that service already has a pending or confirmed appointment at the same date and time, or if the customer already has one at that date and time. A unique partial index on `appointments` also stops two simultaneous requests from taking the same slot. Cancelled appointments free the slot.
 - Customers only ever see and cancel their **own** appointments; someone else's appointment is a `404`. Cancelling anything that isn't `pending` is a `409`.
+
+Payment rules:
+
+- Only the appointment's own customer can pay, only when it's `confirmed` and `unpaid` (someone else's appointment is a `404`, other states a `409`). Admins and blocked users get `403`.
+- The amount is taken from the stored appointment (`servicePrice`), never from the request. Stripe redirects back only to an allowed `CLIENT_URL` origin.
+- The webhook rejects requests without a valid Stripe signature (`400`). It also checks that the session's appointment, customer, amount and currency match the database before marking anything paid, and it is idempotent: one transaction per Checkout Session, however often Stripe retries.
+- Admins can't change payment status or transactions; cancelling a paid appointment doesn't refund it automatically.
 
 ### Authentication
 
@@ -127,5 +146,5 @@ stripe listen --forward-to localhost:5000/api/payments/webhook
 ## Links
 
 - Live API: _TBD_
-- Client repository: _TBD_
-- Server repository: _TBD_
+- Client repository: https://github.com/RoaringMaelstrom/ph-a9
+- Server repository: https://github.com/RoaringMaelstrom/ph_a9_server
