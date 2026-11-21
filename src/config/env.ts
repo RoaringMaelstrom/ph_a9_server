@@ -44,4 +44,14 @@ export const env = {
    * have this URL as issuer and audience.
    */
   betterAuthUrl: stripTrailingSlash(required("BETTER_AUTH_URL")),
+
+  /**
+   * Stripe (test or live) secret key and the webhook signing secret
+   * ("whsec_..."). Optional at startup so the rest of the API still runs
+   * without them; the payment routes answer 503 until both are set.
+   */
+  stripeSecretKey: optional("STRIPE_SECRET_KEY"),
+  stripeWebhookSecret: optional("STRIPE_WEBHOOK_SECRET"),
+  /** ISO 4217 currency for Checkout, lowercase (e.g. "usd") */
+  currency: optional("CURRENCY", "usd").toLowerCase(),
 } as const

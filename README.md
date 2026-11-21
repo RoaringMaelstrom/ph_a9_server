@@ -94,7 +94,7 @@ MongoDB database `SalonBook`, shared with the client's Better Auth. Mongoose mod
 
 ## Sample data
 
-`seed/services.json` contains 8 sample services covering all 7 categories (MongoDB Extended JSON). Import them into the `services` collection with MongoDB Compass (**Add Data → Import JSON**), or:
+`seed/services.json` contains 38 sample services across all 7 categories (35 active, 3 inactive), enough to try search, category filters, sorting and pagination (MongoDB Extended JSON). If you already imported an earlier version, delete the old documents first, or they will appear twice. Import them into the `services` collection with MongoDB Compass (**Add Data → Import JSON**), or:
 
 ```bash
 mongoimport --uri "<MONGODB_URI>" --db SalonBook --collection services --jsonArray --file seed/services.json
@@ -112,6 +112,17 @@ Create a `.env` file in the project root (locally) or add these in the Vercel pr
 | `DB_NAME` | Database name (default `SalonBook`) |
 | `CLIENT_URL` | **Required.** Allowed client origin(s) for CORS, comma-separated |
 | `BETTER_AUTH_URL` | **Required.** URL of the Next.js app running Better Auth (its `baseURL`), used to verify JWTs |
+| `STRIPE_SECRET_KEY` | Stripe secret key (`sk_test_...` for test mode). Payment routes answer 503 without it |
+| `STRIPE_WEBHOOK_SECRET` | Signing secret of the webhook endpoint `POST /api/payments/webhook` (`whsec_...`) |
+| `CURRENCY` | Checkout currency, ISO 4217 (default `usd`) |
+
+### Stripe webhook
+
+Payments are only marked **paid** by the signed Stripe webhook. Subscribe the endpoint `https://<api-host>/api/payments/webhook` to `checkout.session.completed`, `checkout.session.async_payment_succeeded` and `checkout.session.async_payment_failed`. Locally, forward events with the Stripe CLI and use the `whsec_...` it prints:
+
+```bash
+stripe listen --forward-to localhost:5000/api/payments/webhook
+```
 
 ## Links
 

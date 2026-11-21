@@ -37,6 +37,11 @@ import {
   updateAppointmentStatus,
 } from "./controllers/adminAppointment.controller.js"
 import { listUsers, setUserBlocked } from "./controllers/adminUser.controller.js"
+import {
+  createCheckoutSession,
+  getCheckoutSessionStatus,
+  handleStripeWebhook,
+} from "./controllers/payment.controller.js"
 
 const app = express()
 
@@ -158,15 +163,19 @@ api.patch("/appointments/:id/cancel", ...customerOnly, cancelMyAppointment)
 // --- Payments & transactions ------------------------------------------------
 
 // CUSTOMER: start Stripe Checkout for own "confirmed" + "unpaid" appointment.
-// Body: { appointmentId } → { url }
-api.post("/payments/checkout-session", ...customerOnly, notImplemented)
+// Body: { appointmentId } → { url }. Amount comes from the stored appointment.
+api.post("/payments/checkout-session", ...customerOnly, createCheckoutSession)
 
-// STRIPE: webhook (checkout.session.completed). The ONLY place that marks an
-// appointment "paid" and creates the transaction. Receives the raw body.
+// CUSTOMER: read-only status of own Checkout Session (Payment Success page).
+api.get("/payments/checkout-session/:sessionId", ...customerOnly, getCheckoutSessionStatus)
+
+// STRIPE: webhook (checkout.session.completed / async_payment_*), verified by
+// its signature. The ONLY place that marks an appointment "paid" and creates
+// the transaction. Receives the raw body (any content type) for the check.
 api.post(
   STRIPE_WEBHOOK_PATH.replace("/api", ""),
-  express.raw({ type: "application/json" }),
-  notImplemented
+  express.raw({ type: () => true, limit: "1mb" }),
+  handleStripeWebhook
 )
 
 // CUSTOMER: the caller's own transactions (payment history).
