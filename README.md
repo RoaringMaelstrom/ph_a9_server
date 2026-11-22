@@ -60,7 +60,7 @@ All routes are under `/api`. Responses are `{ success: true, data }` or `{ succe
 | GET | `/api/admin/users` | Admin | Registered customers (admins aren't listed), newest first, with `appointmentCount` |
 | PATCH | `/api/admin/users/:id/block` | Admin | `{ isBlocked: true | false }`. Admin accounts can't be blocked. Blocking also signs the user out |
 | GET | `/api/admin/stats` | Admin | `{ totalCustomers, activeServices, totalAppointments, pendingAppointments, confirmedAppointments, successfulPayments }` |
-| POST | `/api/payments/checkout-session` | Customer | `{ appointmentId }` → `{ url }`: Stripe Checkout for the caller's own **confirmed + unpaid** appointment |
+| POST | `/api/payments/checkout-session` | Customer | `{ appointmentId }` → `{ url }`: Stripe Checkout for the caller's own **confirmed + unpaid** appointment (`201` new session, `200` existing open session reused) |
 | GET | `/api/payments/checkout-session/:sessionId` | Customer | Read-only status of the caller's own Checkout Session (Payment Success page) |
 | POST | `/api/payments/webhook` | Stripe | Signature-verified webhook. The only place that sets `paymentStatus: "paid"` and creates transactions |
 | GET | `/api/transactions/me` | Customer | The caller's own payment history, newest first, with `service`, `customer` and `appointmentDate` |
@@ -81,6 +81,7 @@ Payment rules:
 - Only the appointment's own customer can pay, only when it's `confirmed` and `unpaid` (someone else's appointment is a `404`, other states a `409`). Admins and blocked users get `403`.
 - The amount is taken from the stored appointment (`servicePrice`), never from the request. Stripe redirects back only to an allowed `CLIENT_URL` origin.
 - The webhook rejects requests without a valid Stripe signature (`400`). It also checks that the session's appointment, customer, amount and currency match the database before marking anything paid, and it is idempotent: one transaction per Checkout Session, however often Stripe retries.
+- One payable Checkout Session per appointment, so a customer can't pay twice (e.g. from two tabs). Pressing Pay Now again reuses the open session (`200`); if it has expired or has under 5 minutes left, it's closed and a new one is created (`201`). If the previous session was already completed, the request is a `409`. When several requests arrive at once, only one session is kept and the others are expired. When an admin cancels an unpaid appointment, its open Checkout page is expired too.
 - Admins can't change payment status or transactions; cancelling a paid appointment doesn't refund it automatically.
 
 ### Authentication

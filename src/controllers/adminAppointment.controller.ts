@@ -6,6 +6,7 @@ import { Appointment } from "../models/Appointment.js"
 import { AppError } from "../utils/AppError.js"
 import { sendData } from "../utils/sendResponse.js"
 import { SERVICE_SUMMARY_FIELDS } from "./appointment.controller.js"
+import { closeCheckoutSession } from "./payment.controller.js"
 
 /** Customer fields embedded in admin lists (never auth or internal fields). */
 export const CUSTOMER_SUMMARY_FIELDS = "name email image phone"
@@ -78,7 +79,15 @@ export async function updateAppointmentStatus(req: Request, res: Response) {
     .populate({ path: "service", select: SERVICE_SUMMARY_FIELDS })
     .populate({ path: "customer", select: CUSTOMER_SUMMARY_FIELDS })
 
-  if (appointment) return sendData(res, appointment)
+  if (appointment) {
+    if (next === "cancelled" && appointment.paymentStatus === "unpaid") {
+      // Close any open Stripe Checkout page so a cancelled appointment can't be paid.
+      const { checkoutSessionId } =
+        (await Appointment.findById(id).select("+checkoutSessionId").lean()) ?? {}
+      if (checkoutSessionId) await closeCheckoutSession(checkoutSessionId)
+    }
+    return sendData(res, appointment)
+  }
 
   const existing = await Appointment.findById(id).select("status").lean()
   if (!existing) throw new AppError(404, "Appointment not found.")

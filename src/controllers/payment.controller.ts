@@ -48,6 +48,7 @@ export async function createCheckoutSession(req: Request, res: Response) {
 
   // Someone else's appointment is a 404: we don't reveal that it exists.
   const appointment = await Appointment.findOne({ _id: appointmentId, customerId: customer.id })
+    .select("+checkoutSessionId")
     .populate({ path: "service", select: "serviceName image" })
     .lean()
   if (!appointment) throw new AppError(404, "Appointment not found.")
@@ -64,12 +65,19 @@ export async function createCheckoutSession(req: Request, res: Response) {
     )
   }
 
+  const stripe = getStripe()
+
+  // One payable session per appointment: reuse the previous one if it's still
+  // open, refuse if it was already paid, otherwise start a new one.
+  const previousSessionId = appointment.checkoutSessionId ?? null
+  const reusableUrl = await settlePreviousSession(stripe, previousSessionId)
+  if (reusableUrl) return sendData(res, { url: reusableUrl }, 200)
+
   const service = (appointment as unknown as { service?: ServiceSummary }).service ?? null
   const origin = clientOrigin(req)
   // Ids we wrote ourselves; Stripe echoes them back in the signed webhook.
   const metadata = { appointmentId, customerId: customer.id }
 
-  const stripe = getStripe()
   let session: Stripe.Checkout.Session
   try {
     session = await stripe.checkout.sessions.create({
@@ -102,7 +110,90 @@ export async function createCheckoutSession(req: Request, res: Response) {
   }
 
   if (!session.url) throw new AppError(502, "Stripe didn't return a checkout page. Please try again.")
+
+  // Save it as the appointment's session, but only if no other request (e.g.
+  // a second tab) replaced the previous one in the meantime.
+  const claimed = await Appointment.updateOne(
+    { _id: appointmentId, customerId: customer.id, checkoutSessionId: previousSessionId },
+    { checkoutSessionId: session.id }
+  )
+  if (claimed.modifiedCount === 0) {
+    await closeCheckoutSession(session.id)
+    throw new AppError(
+      409,
+      "A payment for this appointment was just started in another tab or window. Please continue there, or try again."
+    )
+  }
+
   sendData(res, { url: session.url }, 201)
+}
+
+/** An open session is reused only if it has at least this long left. */
+const MIN_REUSE_SECONDS = 5 * 60
+
+/**
+ * Makes sure the appointment's previous Checkout Session can't be paid
+ * alongside a new one:
+ * - open with enough time left → returns its URL (reuse it)
+ * - open but about to expire → expires it, returns null (start a new one)
+ * - expired / unknown / none → returns null (start a new one)
+ * - completed → 409: already paid, or a delayed payment is still processing
+ */
+async function settlePreviousSession(stripe: Stripe, sessionId: string | null) {
+  if (!sessionId) return null
+
+  let session: Stripe.Checkout.Session
+  try {
+    session = await stripe.checkout.sessions.retrieve(sessionId)
+  } catch (err) {
+    if ((err as { statusCode?: number }).statusCode === 404) return null
+    console.error("[payments] retrieving previous checkout session failed:", (err as Error).message)
+    throw new AppError(502, "We couldn't reach Stripe. Please try again in a moment.")
+  }
+
+  if (session.status === "open") {
+    const secondsLeft = session.expires_at - Math.floor(Date.now() / 1000)
+    if (session.url && secondsLeft >= MIN_REUSE_SECONDS) return session.url
+    session = (await closeCheckoutSession(sessionId)) ?? session
+    if (session.status === "open") {
+      throw new AppError(502, "We couldn't reach Stripe. Please try again in a moment.")
+    }
+  }
+
+  if (session.status === "complete") {
+    throw new AppError(
+      409,
+      session.payment_status === "paid"
+        ? "This appointment has already been paid. It can take a moment to show as paid."
+        : "Your payment for this appointment is being processed."
+    )
+  }
+  return null
+}
+
+/**
+ * Expires a Checkout Session so it can no longer be paid. Best effort: never
+ * throws. Returns the session's state afterwards (it may have completed just
+ * before), or null if Stripe couldn't be reached.
+ */
+export async function closeCheckoutSession(sessionId: string) {
+  let stripe: Stripe
+  try {
+    stripe = getStripe()
+  } catch {
+    return null
+  }
+  try {
+    return await stripe.checkout.sessions.expire(sessionId)
+  } catch {
+    // Not open any more (completed or already expired): report its real state.
+    try {
+      return await stripe.checkout.sessions.retrieve(sessionId)
+    } catch (err) {
+      console.error(`[payments] couldn't close checkout session ${sessionId}:`, (err as Error).message)
+      return null
+    }
+  }
 }
 
 /**

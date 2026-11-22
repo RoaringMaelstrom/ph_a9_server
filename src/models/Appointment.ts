@@ -62,6 +62,17 @@ const appointmentSchema = new Schema(
       enum: APPOINTMENT_STATUSES,
       default: "pending",
     },
+    /**
+     * The appointment's current Stripe Checkout Session. Only one payable
+     * session exists per appointment (see payment.controller.ts), so a
+     * customer can't pay twice from two tabs. Internal: not returned unless
+     * selected with "+checkoutSessionId".
+     */
+    checkoutSessionId: {
+      type: String,
+      default: null,
+      select: false,
+    },
   },
   {
     collection: "appointments",
