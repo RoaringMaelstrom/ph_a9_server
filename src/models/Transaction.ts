@@ -3,8 +3,8 @@ import { Schema, model, type InferSchemaType } from "mongoose"
 import { TRANSACTION_STATUSES } from "../constants.js"
 
 /**
- * A payment record (`transactions` collection). Created ONLY by the verified
- * Stripe webhook; there are no endpoints that edit it.
+ * A payment record (`transactions` collection). Created only from verified
+ * Stripe data (the webhook, or the status-check fallback); no endpoint edits it.
  */
 const transactionSchema = new Schema(
   {

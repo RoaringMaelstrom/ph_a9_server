@@ -163,11 +163,12 @@ api.patch("/appointments/:id/cancel", ...customerOnly, cancelMyAppointment)
 // Body: { appointmentId } → { url }. Amount comes from the stored appointment.
 api.post("/payments/checkout-session", ...customerOnly, createCheckoutSession)
 
-// CUSTOMER: read-only status of own Checkout Session (Payment Success page).
+// CUSTOMER: status of own Checkout Session (Payment Success page). Records the
+// payment if Stripe says it is paid but the webhook hasn't arrived yet.
 api.get("/payments/checkout-session/:sessionId", ...customerOnly, getCheckoutSessionStatus)
 
 // STRIPE: webhook (checkout.session.completed / async_payment_*), verified by
-// its signature. The ONLY place that marks an appointment "paid" and creates
+// its signature. The main place that marks an appointment "paid" and creates
 // the transaction. Receives the raw body (any content type) for the check.
 api.post(
   STRIPE_WEBHOOK_PATH.replace("/api", ""),

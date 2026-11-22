@@ -59,7 +59,7 @@ export async function listAllAppointments(req: Request, res: Response) {
 /**
  * PATCH /api/admin/appointments/:id/status (ADMIN)
  * Body: { status: "confirmed" | "cancelled" }. Only `status` is read: payment
- * fields can never be changed here (only the Stripe webhook marks "paid").
+ * fields can never be changed here (only verified Stripe payments mark "paid").
  */
 export async function updateAppointmentStatus(req: Request, res: Response) {
   const id = String(req.params.id)

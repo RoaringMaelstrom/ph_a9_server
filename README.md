@@ -9,7 +9,7 @@ REST API for **SalonBook**, a salon appointment booking platform. Customers brow
 - **JWT authentication:** Better Auth tokens are verified against the client's JWKS in a dedicated middleware.
 - **Server-side authorization:** every protected route re-reads the user's role and blocked status from the database.
 - **Admin tools:** service CRUD, confirm/cancel appointments, block/unblock customers (blocking also signs them out), overview statistics and a read-only transaction list.
-- **Stripe payments:** Checkout for confirmed appointments; only the signature-verified webhook marks an appointment paid and records the transaction.
+- **Stripe payments:** Checkout for confirmed appointments; payments are recorded from verified Stripe data only: the signed webhook, with a fallback check on the payment success page if the webhook is late or missing.
 
 ## Tech stack
 
@@ -61,8 +61,8 @@ All routes are under `/api`. Responses are `{ success: true, data }` or `{ succe
 | PATCH | `/api/admin/users/:id/block` | Admin | `{ isBlocked: true | false }`. Admin accounts can't be blocked. Blocking also signs the user out |
 | GET | `/api/admin/stats` | Admin | `{ totalCustomers, activeServices, totalAppointments, pendingAppointments, confirmedAppointments, successfulPayments }` |
 | POST | `/api/payments/checkout-session` | Customer | `{ appointmentId }` → `{ url }`: Stripe Checkout for the caller's own **confirmed + unpaid** appointment (`201` new session, `200` existing open session reused) |
-| GET | `/api/payments/checkout-session/:sessionId` | Customer | Read-only status of the caller's own Checkout Session (Payment Success page) |
-| POST | `/api/payments/webhook` | Stripe | Signature-verified webhook. The only place that sets `paymentStatus: "paid"` and creates transactions |
+| GET | `/api/payments/checkout-session/:sessionId` | Customer | Status of the caller's own Checkout Session (Payment Success page). If Stripe reports it paid but the webhook hasn't been processed, records the payment (same checks as the webhook) |
+| POST | `/api/payments/webhook` | Stripe | Signature-verified webhook. The main place that sets `paymentStatus: "paid"` and creates transactions |
 | GET | `/api/transactions/me` | Customer | The caller's own payment history, newest first, with `service`, `customer` and `appointmentDate` |
 | GET | `/api/admin/transactions` | Admin | All transactions, same shape. Read-only: no endpoint edits transactions |
 
@@ -110,7 +110,7 @@ MongoDB database `SalonBook`, shared with the client's Better Auth. Mongoose mod
 | `user` | `User` | Owned by Better Auth. The API reads it and only changes `isBlocked`. Fields used: `name, email, image, role (customer/admin), isBlocked, phone` |
 | `services` | `Service` | `serviceName, category, description, price (> 0), duration (minutes, > 0), image, status (active/inactive, default active), createdAt` |
 | `appointments` | `Appointment` | `serviceId → services, customerId → user, appointmentDate (YYYY-MM-DD), timeSlot (HH:mm), message, servicePrice, paymentStatus (unpaid/paid), status (pending/confirmed/cancelled), createdAt` |
-| `transactions` | `Transaction` | `appointmentId → appointments, customerId → user, amount, currency, stripeSessionId (unique), status (paid/failed), createdAt`. Written only by the Stripe webhook |
+| `transactions` | `Transaction` | `appointmentId → appointments, customerId → user, amount, currency, stripeSessionId (unique), status (paid/failed), createdAt`. Written only from verified Stripe data (webhook or status-check fallback) |
 
 ## Sample data
 
@@ -138,7 +138,7 @@ Create a `.env` file in the project root (locally) or add these in the Vercel pr
 
 ### Stripe webhook
 
-Payments are only marked **paid** by the signed Stripe webhook. Subscribe the endpoint `https://<api-host>/api/payments/webhook` to `checkout.session.completed`, `checkout.session.async_payment_succeeded` and `checkout.session.async_payment_failed`. Locally, forward events with the Stripe CLI and use the `whsec_...` it prints:
+Payments are marked **paid** by the signed Stripe webhook. If it is late or never arrives, the payment success page's status check fetches the session from Stripe and records it instead, so a missed webhook can't leave a payment stuck. The webhook is still required: it is the only path for customers who close the tab before returning to the site. Subscribe the endpoint `https://<api-host>/api/payments/webhook` to `checkout.session.completed`, `checkout.session.async_payment_succeeded` and `checkout.session.async_payment_failed`. Locally, forward events with the Stripe CLI and use the `whsec_...` it prints:
 
 ```bash
 stripe listen --forward-to localhost:5000/api/payments/webhook

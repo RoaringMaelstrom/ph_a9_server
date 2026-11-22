@@ -198,9 +198,13 @@ export async function closeCheckoutSession(sessionId: string) {
 
 /**
  * GET /api/payments/checkout-session/:sessionId (CUSTOMER)
- * Read-only status for the Payment Success page. Only the customer who
- * started the session can see it. "Paid" is reported from OUR database (set
- * by the webhook), never decided here, and nothing is written.
+ * Status for the Payment Success page. Only the customer who started the
+ * session can see it. "Paid" is reported from OUR database.
+ *
+ * Fallback for a missed or delayed webhook: if Stripe says the session is
+ * paid but no transaction exists yet, the payment is recorded here with the
+ * same checks as the webhook (`recordPayment`). The session comes from our own
+ * authenticated call to Stripe, never from the request, so it can't be faked.
  */
 export async function getCheckoutSessionStatus(req: Request, res: Response) {
   const sessionId = String(req.params.sessionId)
@@ -224,12 +228,24 @@ export async function getCheckoutSessionStatus(req: Request, res: Response) {
     throw new AppError(404, "Payment not found.")
   }
 
-  const [appointment, transaction] = await Promise.all([
-    Appointment.findOne({ _id: appointmentId, customerId })
-      .populate({ path: "service", select: SERVICE_SUMMARY_FIELDS })
-      .lean(),
-    Transaction.findOne({ stripeSessionId: sessionId, customerId }).lean(),
-  ])
+  const findTransaction = () =>
+    Transaction.findOne({ stripeSessionId: sessionId, customerId }).lean()
+
+  let transaction = await findTransaction()
+  if (!transaction && session.status === "complete" && session.payment_status === "paid") {
+    try {
+      await recordPayment(session, "paid")
+      transaction = await findTransaction()
+      if (transaction) console.warn(`[payments] session ${sessionId}: recorded by the status-check fallback (webhook not received yet).`)
+    } catch (err) {
+      // The webhook (or the next status check) will try again.
+      console.error(`[payments] session ${sessionId}: status-check fallback failed:`, err)
+    }
+  }
+
+  const appointment = await Appointment.findOne({ _id: appointmentId, customerId })
+    .populate({ path: "service", select: SERVICE_SUMMARY_FIELDS })
+    .lean()
 
   sendData(res, {
     sessionId,
@@ -248,8 +264,8 @@ export async function getCheckoutSessionStatus(req: Request, res: Response) {
 
 /**
  * POST /api/payments/webhook (STRIPE)
- * The ONLY code that marks an appointment "paid" and writes transactions.
- * Requests without a valid Stripe signature are rejected, so nobody can fake
+ * The main way payments are recorded (the status check above is only a
+ * fallback). Both go through `recordPayment`. Requests without a valid Stripe signature are rejected, so nobody can fake
  * a payment by calling this URL. Receives the raw body (see index.ts).
  */
 export async function handleStripeWebhook(req: Request, res: Response) {

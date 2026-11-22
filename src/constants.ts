@@ -34,7 +34,7 @@ export const ACTIVE_APPOINTMENT_STATUSES = ["pending", "confirmed"] as const
 
 export const PAYMENT_STATUSES = ["unpaid", "paid"] as const
 
-/** Transactions are only written by the verified Stripe webhook. */
+/** Transactions are only written from verified Stripe data (webhook or status-check fallback). */
 export const TRANSACTION_STATUSES = ["paid", "failed"] as const
 
 export const USER_ROLES = ["customer", "admin"] as const
